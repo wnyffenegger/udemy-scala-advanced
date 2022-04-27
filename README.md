@@ -384,3 +384,117 @@ class PropertyBasedSet[A](property: A => Boolean) extends MySet[A] {
 
 Collections are generally **partial functions**. They are defined on some domain (indices of list, keys in map)
 and undefined outside that. This mentality is different from the OOP notion of a collection.
+
+### Curried Partially Applied Functions
+
+Lessons:
+
+1. Lifting = ETA-expansion which converts a method to a Function due to JVM limitations
+2. Lifting curried functions occurs automatically in `.map, .flatMap, etc.`
+3. Using an underscore triggers lifting ex. `curriedAddMethod(7) _`
+4. Reminder you can curry a function with `simpleAddFunction.curried(7)`
+5. Underscores can be used to replace function parameters and create a curried function ex. `val insertName = concatenator("Hello, I'm ", _, "how are you?")`
+
+Call by function vs. call by name:
+
+1. Parameterless methods != Methods with parameters
+2. Parameterless methods cannot be called as functions or lifted
+3. Functions with parameters cannot be passed by name and implicitly converted to values
+
+```scala
+  def byName(n: Int) = n + 1
+  def byFunction(f: () => Int): Int = f() + 1
+
+  def method: Int = 42
+  def parenMethod(): Int = 42
+
+  byName(method) // Okay
+  byFunction(method) // Not okay case #2
+
+  byFunction(parenMethod()) // Okay
+  byName(parenMethod) // Not okay case #3
+```
+
+### Lazy Evaluation
+
+By default Scala functional calls are not lazy. We need to use the `lazy` keyword to trigger that behavior.
+
+1. `lazy` says compute when I need this and only when I need this. Ex. `lazy val x: Int = throw new RuntimeException` will not throw exception until someone uses `x`
+2. Use lazy for **call by need**. Instead of computing a value multiple times, putting `lazy` on the val will force it to only be computed once.
+```scala
+  def byNameMethod(n: => Int): Int = {
+    // Call by name will trigger calculation of value three times
+    // So switch to lazy with CALL BY NEED
+    lazy val t = n
+    t + t + t + 1
+  }
+
+    def retrieveMagicValue: Int = {
+      // side effect or a long computation
+      println("Waiting")
+      Thread.sleep(1000)
+      42
+    }
+    
+    println(byNameMethod(retrieveMagicValue))
+```
+3. For comprehensions are lazy by default which is great for handling Future and other async things
+4. Putting lazy on functions delays calculation
+5. If you want something to be lazy all of the things it calls need to be lazy and vice versa.
+
+
+### Monads
+
+```scala
+
+trait MonadTemplate[A] {
+  def unit(value: A): MonadTemplate[A]    // Also called pure or apply
+  def flatMap[B](f: A => MonadTemplate[B]): MonadTemplate[B]  // also called bind
+}
+```
+
+All monads must satisfy the following:
+
+1. Left-identity: `unit(x).flatMap(f) == f(x)`
+2. Right-identity: `aMonadInstance.flatMap(unit) == aMonadInstance`
+3. Associativity: `m.flatMap(f).flatMap(g) == m.flatMap(x => f(x).flatMap(g))`
+
+Things that are monads:
+
+1. List
+2. Option
+3. Future
+4. Try
+5. Stream
+6. Set
+
+The tricky part about monads: how do you make them lazy? **Rely on call by name and call by need**
+
+1. Use `lazy val` to delay the evaluation of values provided to a Monad
+2. Use `=>` to tell the compiler that a parameter is call by name
+3. All parameters should be call by name including the parameters in functions passed
+to the Monad for `flatMap`. 
+
+Example from course:
+```scala
+class Lazy[+A](value: => A) {
+
+  // Prevent value from being evaluated multiple times
+  private lazy val internalValue = value
+
+  // Trigger evaluation of value
+  def use: A = value
+
+  // this version flatMap will eagerly evaluate function parameter
+  //    def flatMap[B](f: A => Lazy[B]): Lazy[B] = ...
+  // You must delay when the function evaluates the parameter to also be call by name otherwise
+  // the compiler will evaluate the parameter as soon as it is provided
+  def flatMap[B](f: (=> A) => Lazy[B]): Lazy[B] = {
+
+    f(internalValue)
+
+    // if called this way then every time "use" is called this value will be re-evaluated
+    // f(value)
+  }
+}
+```

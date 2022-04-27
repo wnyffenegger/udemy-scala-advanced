@@ -87,10 +87,18 @@ object CurriesPartiallyAppliedFunctions extends App {
    * Take a curried function for a formatter and apply to a list of numbers
    */
 
-  def formatter(s: String, x: Double): String = s.format(x)
-  val format = formatter("%8.6f", _)
+  def formatter(s: String)(x: Double): String = s.format(x)
+  val numbers = List(Math.PI, Math.E, 1, 9.8, 1.3e-12)
+
+  val format = formatter("%8.6f") _
   List(1.11111, 1.2222222222, 234.122222222222).map(format).foreach(println)
 
+  val simpleFormat = formatter("%4.2f") _
+  val seriousFormat = formatter("%8.6f") _
+  val precisFormat = formatter("%14.12f") _
+
+  println(numbers.map(simpleFormat))
+  println(numbers.map(formatter("%14.12f")))
   /**
    * 2. difference between
    *  - functions vs methods
@@ -98,12 +106,6 @@ object CurriesPartiallyAppliedFunctions extends App {
    *
    *  Define a method call by name
    */
-
-  def byName(n: Int) = n + 1
-  def byFunction(f: () => Int): Int = f() + 1
-
-  def method: Int = 42
-  def parenMethod(): Int = 42
 
   /**
    * Call each by name and by function
@@ -115,5 +117,35 @@ object CurriesPartiallyAppliedFunctions extends App {
    *
    * Figure out which case applies and why
    */
+
+  def byName(n: Int) = n + 1
+  def byFunction(f: () => Int): Int = f() + 1
+
+  def method: Int = 42
+  def parenMethod(): Int = 42
+
+  byName(23)
+  byName(method)
+  // Will always run the function no matter what
+  byName(parenMethod())
+
+  // Not okay
+//    byName(parenMethod)
+  //  byName(parenMethod _)
+
+  // Still okay because function is being called
+  byName((() => 42)())
+
+  // Not okay, parameterless methods are not equivalent to property less methods
+//  byFunction(42)
+//  byFunction(method)
+
+  // Compiler automatically does eta expansion for methods with parameters but not for parameterless methods
+  // Reminder function is converting a method to a function here
+  byFunction(parenMethod)
+  byFunction(parenMethod _)
+  byFunction(() => 42)
+
+
 
 }
