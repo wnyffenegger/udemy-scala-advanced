@@ -498,3 +498,71 @@ class Lazy[+A](value: => A) {
   }
 }
 ```
+
+## Futures
+
+### Basics
+
+A future is a wrapper around an asynchronous action that returns a `future.value` is of type `Try[T]`.
+
+Futures have lots of methods on them for handling the results of an action either synchronously or
+asynchronously.
+
+Some examples:
+
+1. onComplete: run a callback when a future completes, the callback must handle both success and failure
+2. recover: on failure of a future recover using a default value
+3. recoverWith: like recover but calls another future
+4. Await.result(future) allows waiting for a future to finish
+
+```scala
+import scala.concurrent.{Awaitable, ExecutionContext}
+import scala.util.Try
+
+trait Future[+T] extends Awaitable[T] {
+  
+  def onComplete[U](f: Try[T] => U)(implicit executor: ExecutionContext): Unit
+  
+  def isCompleted: Boolean
+  
+  def value: Option[Try[T]]
+
+  // etc.
+```
+
+
+### Important Things About Futures
+
+1. Futures can be chained
+2. Futures can be blocked on
+3. For comprehensions block on futures
+4. Futures are Monads and so flatMap blocks on a future until it is completed
+
+### Promises
+
+Promises are like futures but allow creating contracts. I will do this. A promise contains a future which can
+be used with callbacks and methods to handle the eventual results. Kind of like JavaScript Promises.
+
+Example:
+```scala
+import scala.concurrent.Promise
+import scala.util.Success
+
+  val promise = Promise[Int]()
+  val future = promise.future
+
+  future.onComplete {
+    case Success(r) => println("[consumer] I've received " + r)
+  }
+
+  val producer = new Thread(() => {
+    println("[producer] crunching numbers...")
+    Thread.sleep(500)
+    promise.success(42)
+    println("[producer] done")
+  })
+
+  producer.start()
+  Thread.sleep(1000)
+```
+
