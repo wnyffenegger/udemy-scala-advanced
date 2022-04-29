@@ -566,3 +566,109 @@ import scala.util.Success
   Thread.sleep(1000)
 ```
 
+
+## Implicits
+
+Implicits are methods, values, and accessors "looked up" by the compiler at compile time but not
+explicitly defined for a type in that type's definition.
+
+Example: 
+```scala
+  // -> is not defined for Strings
+  // Compiler looks for a definition of -> at compile time and adds it
+  val pair = "Daniel" -> "555"
+```
+
+### The Basics
+
+What things can be implicits?
+
+1. val/var default values for things
+2. objects like singletons
+3. accessor methods (methods with no parentheses)
+
+What order are implicits discovered in?
+
+1. First look at normal scope (local scope where code is written)
+2. Look at imported scope
+3. Look at companion objects for all types involved in the method signature
+
+Best Practices
+
+1. If there is a single possible value for an implicit -> Define the implicit in a companion object
+2. If there are many possible values for the implicit, but a single good one -> Define the good value as an implicit in the companion object
+3. If there are many possible values and no single good value -> Define the values as implicits in custom objects
+
+
+### Type Classes
+
+Implicits let you use type classes seamlessly across your code.
+
+What is a type class? A type class defines a method/behavior available to all classes that implement that type.
+
+The standard pattern with Scala is:
+
+1. Create a trait with the behavior you want to implement
+2. Create a companion object for that trait and add an apply method calling the behavior
+3. Extend the trait with the desired classes you want to call that behavior
+4Call that behavior with `MyTypeClassTemplate(args..)`
+
+Example:
+```scala
+object Test {
+  trait MyTypeClassTemplate[T] {
+    def action(value: T): String
+  }
+
+  object MyTypeClassTemplate {
+    def apply[T](value: T)(implicit instance: MyTypeClassTemplate[T]): String = instance.action(value)
+  }
+
+  case class FancyOrNot(fancy: Boolean)
+
+  // Add a default implicit definition
+  // Define additional objects locally to get custom behavior
+  implicit object FancyOrNot extends MyTypeClassTemplate[FancyOrNot] {
+    def action(value: FancyOrNot): String = if (value.fancy) "posh" else "not posh"
+  }
+
+  println(MyTypeClassTemplate(FancyOrNot(false)))
+}
+```
+
+Why do we like this?
+
+1. Preserves type safety and independence of classes that implement a trait
+2. Implement as many times as you use it and in different ways for each type
+4. Apply sensible defaults via implicit classes
+5. Override those defaults with additional implicit classes
+6. Minimum repetition possible
+
+### Ad Hoc Polymorphism
+
+Two distinct or unrelated types can have methods called as long as those methods are defined implicitly. Those methods
+can do different things and can even be overridden whenever we want.
+
+Compiler makes sure that we use the correct type class implementation of the trait.
+
+**Ad Hoc Polymorphism gives us Type Enrichment**
+
+### Type Enrichment
+
+Ad Hoc polymorphism allows you to modify types you do not have access to the source code for.
+
+Many of the syntactic sugars available in Scala are built off modifying types with implicits.
+
+Example:
+```scala
+object Test {
+  implicit class RichInt(val value: Int) extends AnyVal {
+    def isEven: Boolean = value % 2 == 0
+
+    def sqrt: Double = Math.sqrt(value)
+  }
+
+  // Cool way to do this
+  42.isEven
+}
+```
