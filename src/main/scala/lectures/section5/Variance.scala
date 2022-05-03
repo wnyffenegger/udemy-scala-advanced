@@ -153,11 +153,11 @@ object Variance extends App {
 //
 //
 //  // Contravariant
-//  abstract class Parking[-T](things: List[T]) {
-//    def park[S <: T](vehicle: S): Parking[T]
-//    def impound(vehicles: List[T]): Parking[T]
-//    def checkVehicles[S <: T](condition: String): List[S]
-//  }
+  abstract class Parking[-T](things: List[T]) {
+    def park[S <: T](vehicle: S): Parking[T]
+    def impound(vehicles: List[T]): Parking[T]
+    def checkVehicles[S <: T](condition: String): List[S]
+  }
 
 // 2
 
@@ -196,12 +196,12 @@ object Variance extends App {
 
 
   // Contravariant
-  abstract class Parking[-T](things: List[T]) {
-    def park[S <: T](vehicle: S): Unit
-    def impound(vehicles: List[T]): Unit
-    def checkVehicles[S <: T](condition: String): List[S]
-
-    def flatMap[R, S <: T](f: S => Parking[R]): Parking[R]
-  }
+//  abstract class Parking[-T](things: List[T]) {
+//    def park[S <: T](vehicle: S): Unit
+//    def impound(vehicles: List[T]): Unit
+//    def checkVehicles[S <: T](condition: String): List[S]
+//
+//    def flatMap[R, S <: T](f: S => Parking[R]): Parking[R]
+//  }
 
 }

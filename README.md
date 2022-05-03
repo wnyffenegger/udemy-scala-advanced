@@ -672,3 +672,278 @@ object Test {
   42.isEven
 }
 ```
+
+## Scala's Type System
+
+### Diamond Problem
+
+Scala resolves the diamond problem by picking the last override. If there are two mixins inheriting
+from the same trait the last one extended will be included
+
+```scala
+  trait Animal { def name: String }
+  trait Lion extends Animal {
+    override def name: String = "LION"
+  }
+  trait Tiger extends Animal {
+    override def name: String = "TIGER"
+  }
+  class Mutant extends Lion with Tiger
+
+  val m = new Mutant
+  println(m.name)
+
+  // prints out TIGER
+```
+
+### Inheritance via super
+
+Scala's inheritance linearizes stuff so `super` in Scala does not mean the same thing as in Java. Super moves to
+the left in the type linearization.
+
+1. Scala prevents an overrode type from being included twice by discovering them in order
+2. Scala backtracks from the last up, but this is not the same as the order the types are discovered in
+3. The backtrack order follows linearized path, not inheritance of each class
+
+In the example:
+
+1. Cold = AnyRef with <Cold>
+2. Green = AnyRef with <Cold> with <Green>
+3. Blue = AnyRef with <Cold> with <Blue>
+4. Red = AnyRef with <Red>
+5. White = AnyRef with <Red> with ~~AnyRef~~ with <Cold> with <Blue> with ~~AnyRef~~ with ~~<Cold>~~ with <Green> with <White>
+
+In the example backtracking:
+
+1. println("white")
+2. super.print() - looks to left so it hits Green
+3. println("green")
+4. super.print() - looks to left so it hits Blue
+5. println("blue")
+6. super.print() - lookks to left so it hits green
+
+```scala
+  trait Cold {
+    def print: Unit = println("cold")
+  }
+
+  trait Green extends Cold {
+    override def print: Unit = {
+      println("green")
+      super.print
+    }
+  }
+
+  trait Blue extends Cold {
+    override def print: Unit = {
+      println("blue")
+      super.print
+    }
+  }
+
+  class Red {
+    def print: Unit = println("Red")
+  }
+
+  class White extends Red with Green with Blue {
+    override def print: Unit = {
+      println("white")
+      super.print
+    }
+  }
+
+  val color = new White
+  println(color.print)
+
+  // Prints out
+  // white
+  // blue
+  // green
+  // cold
+```
+
+### Variance Types in Scala
+
+1. Covariance: subtype replaces supertype
+2. Invariance: types must exactly match
+3. Contravariance: super type replaces subtype
+
+These types of variance are applied to more than generics, these types of variance apply to variance
+aspects of Scala code. The compiler must limit the variance allowed for class fields, method return types, etc.
+to prevent nonsensical compilation
+
+Example:
+```scala
+trait Animal
+trait Cat extends Animal
+
+// 1 Covariance
+class CCage[+T]
+val ccage_1: CCage[Animal] = new CCage[Cat]
+val ccage_2: CCage[Cat] = new CCage[Cat]
+//val ccage: CCage[Cat] = new CCage[Animal]
+
+// 2 Invariance
+class ICage[T]
+//val icage: ICage[Animal] = new ICage[Cat]
+val icage: ICage[Cat] = new ICage[Cat]
+//val icage: ICage[Cat] = new ICage[Animal]
+
+// 3 Contravariance
+class XCage[-T]
+//val xcage: XCage[Animal] = new XCage[Cat]
+val xcage_1: XCage[Cat] = new XCage[Cat]
+val xcage_2: XCage[Cat] = new XCage[Animal]
+```
+
+### Variance Positions Enforced by Compiler
+
+Specific aspects of scala code like class fields and method arguments have specific variance types.
+
+1. Class `val` fields are in covariant position (so only covariant and invariant accepted)
+2. Class `var` fields are in covariant and contravariant position (so only invariant accepted)
+3. Method arguments are in contravariant position (so only contravariant and invariant accepted)
+4. Method return types are in covariant position (so only covariant and invariant accepted)
+
+#### Class `val` types
+
+All `val`'s passed into Scala classes are covariant. A contravariant val would allow you to replace a super type
+with an arbitrary subtype.
+
+Becuase of this only covariant and invariant args can be passed as class fields
+
+```scala
+
+trait Animal
+trait Cat extends Animal
+trait Crocodile extends Animal
+
+// COVARIANT position
+// In this field the compiler accepts covariant types
+// Also accepts invariant types
+// But does not accept contravariant types
+class CovariantCage[+T](val Animal: T)
+
+  // contravariant type T occurs in covariant position in type => T of value animal
+//  class ContravariantCage[-T](val animal: T)
+
+  // Why the above error, because then you could do the following...
+//  val catCage: XCage[Cat] = new XCage[Animal](new Crocodile)
+```
+
+#### Class `var` types
+
+Because a `var` can be modified, they are in both covariant and contravariant position. When this occurs, the only
+legal overlap of the two is an invariant type.
+
+```scala
+  trait Animal
+  trait Cat extends Animal
+  trait Crocodile extends Animal
+  
+  // covariant type t occurs in contravariant position in type => T of variable animal
+  class CovariantVariableCage[+T](var animal: T)
+
+  // Why the above error, because then you could do the following
+  val cCage: CovariantVariableCage[Animal] = new CovariantVariableCage[Cat](new Cat)
+  cCage.animal = new Crocodile
+
+  // contravariant type t occurs in covariant position in type => T of variable animal
+  class ContravariantVariableCage[-T](var animal: T) // also in covariant position
+  val CatCage: ContravariantVariableCage[Cat] = new ContravariantVariableCage[Animal](new Crocodile)
+```
+
+#### Method Argument Types
+
+Method arguments are in contravariant position to prevent someone from casting a subtype to a supertype and replacing
+with another arbitrary subtype.
+
+```scala
+class Animal
+class Cat extends Animal
+class Dog extends Animal
+
+// Compiler will not allow because covariant arg in contravariant position
+class CovariantCage[+T] {
+  def addAnimal(animal: T) = true
+}
+
+// If compiler allowed, this would work
+val ccage: CovariantCage[Animal] = new CovariantCage[Dog]
+ccage.addAnimal(new Cat)
+
+
+// Compiler wants contravariant args
+class ContravariantCage[-T] {
+  def addAnimal(animal: T) = true
+}
+val acc: ContravariantCage[Cat] = new ContravariantCage[Animal]
+acc.addAnimal(new Cat)
+
+// Contravariant arg so this won't work
+//acc.addAnimal(new Animal)
+
+class Kitty extends Cat
+acc.addAnimal(new Kitty)
+```
+
+#### Method Return Types
+
+Method return types are in covariant position. This means that return types must be invariant or a super type of the
+provided class.
+
+```scala
+class Animal
+class Cat extends Animal
+class Dog extends Animal
+
+// If method return types could be contravariant 
+abstract class ContravariantPetShop[-T] {
+  def get(isItApuppy: Boolean): T
+}
+
+// Then we could do the following
+val catShop: ContravariantPetShop[Animal] = new ContravariantPetShop[Animal] {
+  override def get(isItApuppy: Boolean): Animal = new Cat
+}
+
+val dogShop: ContravariantPetShop[Dog] = catShop
+dogShop.get(true) // and return a cat!!
+```
+
+
+#### Getting around variance limits
+
+Get around variance limits by telling the compiler to widen or narrow a type appropriately.
+
+
+##### Method Argument Types Example
+```scala
+// Method argument element is now of type B which is a super type of A, so if you pass an A everything
+// is good because that is contravariant. By widening the type first we preserve contravariance on the method
+// argument.
+class MyList[+A] {
+  def add[B >: A](element: B): MyList[B] = new MyList[B]
+}
+```
+
+##### Method Return Types Example
+```scala
+class Animal
+class Cat extends Animal
+class Dog extends Animal
+
+// To allow covariance in the return without violating contravariance of T create a replacement type
+// that artificially narrows the type
+// At worst we will return a B == T but T is a super type of B
+class PetShop[-T] {
+  def get[B <: T](isItApuppy: Boolean, defaultAnimal: B): B = defaultAnimal
+}
+
+val shop: PetShop[Dog] = new PetShop[Animal]
+
+//  val cat = shop.get(true, new Cat) // Won't work
+class TerraNova extends Dog
+
+val bigDog = shop.get(true, new TerraNova)
+```
